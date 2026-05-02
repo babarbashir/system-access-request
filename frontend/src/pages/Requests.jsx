@@ -18,6 +18,8 @@ const Requests = () => {
   const [showForm, setShowForm] = useState(false);
   const [viewingRequest, setViewingRequest] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [editingRequest, setEditingRequest] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   
   // Form state
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -124,12 +126,52 @@ const Requests = () => {
         items: items
       };
 
-      await requestService.create(requestData);
-      setSuccess('Request created successfully!');
+      if (isEditMode && editingRequest) {
+        await requestService.update(editingRequest.request_id, requestData);
+        setSuccess('Request updated successfully!');
+      } else {
+        await requestService.create(requestData);
+        setSuccess('Request created successfully!');
+      }
+      
       resetForm();
       loadData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create request');
+      setError(err.response?.data?.error || `Failed to ${isEditMode ? 'update' : 'create'} request`);
+    }
+  };
+
+  const handleEdit = async (requestId) => {
+    try {
+      const request = await requestService.getById(requestId);
+      
+      // Set edit mode
+      setIsEditMode(true);
+      setEditingRequest(request);
+      
+      // Populate form with request data
+      setSelectedEmployeeId(request.employee_id);
+      const emp = employees.find(e => e.employee_id === request.employee_id);
+      setSelectedEmployee(emp || null);
+      setRequestDescription(request.request_description);
+      
+      // Populate items
+      if (request.items && request.items.length > 0) {
+        setItems(request.items.map(item => ({
+          system_id: item.system_id,
+          role_id: item.role_id,
+          business_justification: item.business_justification
+        })));
+      }
+      
+      // Show form
+      setShowForm(true);
+      
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setError('Failed to load request for editing');
+      console.error(err);
     }
   };
 
@@ -203,6 +245,8 @@ const Requests = () => {
     setRequestDescription('');
     setItems([{ system_id: '', role_id: '', business_justification: '' }]);
     setShowForm(false);
+    setIsEditMode(false);
+    setEditingRequest(null);
   };
 
   const getStatusBadgeClass = (status) => {
@@ -232,7 +276,7 @@ const Requests = () => {
 
         {showForm && (
           <div className="request-form" style={{marginBottom: '2rem'}}>
-            <h2>Create New Access Request</h2>
+            <h2>{isEditMode ? 'Edit Access Request' : 'Create New Access Request'}</h2>
             <form onSubmit={handleSubmit}>
               {/* Section 1: Employee Selection */}
               <div className="form-section">
@@ -368,7 +412,7 @@ const Requests = () => {
 
               <div style={{display: 'flex', gap: '1rem', marginTop: '2rem'}}>
                 <button type="submit" className="btn-primary">
-                  Create Request
+                  {isEditMode ? 'Update Request' : 'Create Request'}
                 </button>
                 <button type="button" className="btn-secondary" onClick={resetForm}>
                   Cancel
@@ -427,14 +471,21 @@ const Requests = () => {
                           </button>
                           {req.status === 'Draft' && (
                             <>
-                              <button 
-                                className="btn-success" 
+                              <button
+                                className="btn-primary"
+                                onClick={() => handleEdit(req.request_id)}
+                                style={{marginBottom: '0.5rem'}}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="btn-success"
                                 onClick={() => handleSubmitRequest(req.request_id)}
                               >
                                 Submit
                               </button>
-                              <button 
-                                className="btn-danger" 
+                              <button
+                                className="btn-danger"
                                 onClick={() => handleDelete(req.request_id)}
                               >
                                 Delete
